@@ -4,8 +4,8 @@ Drivers and tools for the 1995 Virtual i-O i-glasses! head mounted display.
 
 ## Status
 
-Field sequential 3D video encoder: implemented. Head tracker (RS-232) driver: not yet
-written, see [docs/hardware.md](docs/hardware.md).
+Field sequential 3D video encoder: implemented. Head tracker (RS-232) driver:
+implemented, and runnable without hardware against a built in simulator.
 
 ## Install
 
@@ -38,6 +38,30 @@ iglasses pattern -o pattern.mkv -d 30 -f ntsc -p ffv1
 # check an encode is really field sequential 3D
 iglasses verify movie.mkv pattern.mkv
 ```
+
+## Head tracker
+
+```sh
+# identify the tracker and stop
+iglasses track -P /dev/ttyUSB0 --info
+
+# stream Euler angles (the default mode) until interrupted
+iglasses track -P /dev/ttyUSB0 --continuous
+
+# cooked mode with medium filtering, 200 readings, also written as CSV
+iglasses track -P /dev/ttyUSB0 -m cooked --filter 3,3 -n 200 --csv track.csv
+
+# mouse emulation, which the tracker runs at 1200 bps
+iglasses track -P /dev/ttyUSB0 --baud 1200 -m mouse --continuous --filter 3,3 --mouse 4,1
+
+# no tracker to hand: run any of the above against the built in simulator
+iglasses track --simulate -m cooked --continuous -n 3
+```
+
+Modes are `raw`, `cooked`, `euler` (default) and `mouse`. Without `--baud` the driver
+sweeps the five supported line rates and resets the tracker until it answers, because
+the tracker keeps its last mode across power cycles and may already be streaming. See
+[docs/tracker.md](docs/tracker.md).
 
 ## Video formats
 
@@ -77,6 +101,7 @@ Resampling kernels: `lanczos` (default), `catrom`, `triangle`, `box`.
 
 * [docs/encoding.md](docs/encoding.md) - why the encoder does what it does.
 * [docs/hardware.md](docs/hardware.md) - the i-glasses! hardware and the tracker.
+* [docs/tracker.md](docs/tracker.md) - the head tracker protocol and driver.
 * [docs/development.md](docs/development.md) - tests, formatting and linting.
 
 ## Licence

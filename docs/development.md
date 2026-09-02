@@ -6,7 +6,9 @@ The only runtime dependencies are:
 
 * **av** (PyAV) - the wheels bundle their own ffmpeg libraries, so no system ffmpeg
   install or `pkg-config` setup is needed;
-* **numpy**.
+* **numpy**;
+* **pyserial** - the head tracker transport. Nothing else in the package imports it, and
+  it is imported lazily, so the video tools work whether or not a serial port exists.
 
 Development extras (`pytest`, `pytest-xdist`, `pytest-cov`, `black`, `pylint`) come from
 the `dev` optional dependency group:
