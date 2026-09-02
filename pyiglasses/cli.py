@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from contextlib import ExitStack
 from fractions import Fraction
 
 from .encode import DEFAULT_PROFILE, PROFILES, InterlacedWriter, get_profile
@@ -9,6 +10,15 @@ from .formats import DEFAULT_FORMAT, FORMATS, get_format
 from .pattern import frame as pattern_frame
 from .pipeline import encode_stereo
 from .stereo import DEFAULT_LAYOUT, LAYOUTS
+from .tracker import (
+    BAUD_RATES,
+    DataMode,
+    SendFormat,
+    SendMode,
+    SimulatedTracker,
+    Tracker,
+)
+from .tracker.device import SerialTransport
 from .verify import verify
 from .weave import FITS, Geometry
 from .resample import KERNELS
@@ -81,6 +91,115 @@ def _cmd_verify(args):
     return int(failed)
 
 
+TRACK_MODES = {
+    "raw": DataMode.RAW,
+    "cooked": DataMode.COOKED,
+    "euler": DataMode.EULER,
+    "mouse": DataMode.MOUSE,
+}
+
+
+def _pair(text, name):
+    """Parse a "a,b" option into two integers."""
+    try:
+        first, second = (int(part) for part in text.split(","))
+    except ValueError:
+        raise ValueError(
+            f"--{name} wants two numbers separated by a comma, got {text!r}"
+        ) from None
+    return first, second
+
+
+def _open_tracker(args):
+    """Connect to a tracker, or to the built in simulator."""
+    transport = SimulatedTracker() if args.simulate else SerialTransport(args.port)
+    tracker = Tracker(transport, timeout=args.timeout)
+    rates = BAUD_RATES if args.baud is None else (args.baud,)
+    rate = tracker.negotiate(rates)
+    if rate is None:
+        raise OSError(f"no tracker answered at any of {list(rates)}")
+    return tracker, rate
+
+
+def _cmd_track(args):
+    if not args.simulate and not args.port:
+        raise ValueError("give --port, or --simulate to use the built in tracker")
+    tracker, rate = _open_tracker(args)
+    with tracker:
+        info = tracker.version()
+        print(
+            f"{info.manufacturer} {info.product} type {info.product_type} "
+            f"hardware {info.hardware:07.3f} firmware {info.firmware:07.3f} at {rate} bps, "
+            f"self test {'passed' if info.self_test_passed else 'FAILED'}"
+        )
+        if info.inverts_yaw:
+            print("firmware predates 001.003: correcting the Euler mode yaw sign")
+        if args.info:
+            return 0
+        mode = TRACK_MODES[args.mode]
+        send = SendMode.CONTINUOUS if args.continuous else SendMode.POLLED
+        if mode is DataMode.MOUSE:
+            send = SendMode.MOUSE_DELTA if args.continuous else SendMode.POLLED
+        filters = _pair(args.filter, "filter") if args.filter else (None, None)
+        mouse = _pair(args.mouse, "mouse") if args.mouse else (None, None)
+        tracker.configure(
+            mode, send, SendFormat(args.format[0].upper()), *filters, *mouse
+        )
+        readings = (
+            tracker.stream(limit=args.samples)
+            if args.continuous
+            else _polled(tracker, args)
+        )
+        _report(readings, mode, args.csv)
+    return 0
+
+
+def _polled(tracker, args):
+    count = 0
+    while args.samples is None or count < args.samples:
+        yield tracker.poll()
+        count += 1
+
+
+def _report(readings, mode, csv_path):
+    """Print readings, and optionally write them as CSV."""
+    if mode is DataMode.MOUSE:
+        header = "dx,dy,left,right"
+    elif mode is DataMode.RAW:
+        header = "x,y,z,pitch,roll"
+    else:
+        header = "yaw,pitch,roll"
+    with ExitStack() as stack:
+        handle = (
+            stack.enter_context(open(csv_path, "w", encoding="ascii"))
+            if csv_path
+            else None
+        )
+        if handle:
+            handle.write(header + "\n")
+        try:
+            for reading in readings:
+                values = _reading_values(reading, mode)
+                print("  ".join(_column(value) for value in values))
+                if handle:
+                    handle.write(",".join(str(value) for value in values) + "\n")
+        except KeyboardInterrupt:
+            pass
+
+
+def _column(value):
+    """Format one reading column."""
+    return f"{value:9.3f}" if isinstance(value, float) else f"{value:>9}"
+
+
+def _reading_values(reading, mode):
+    if mode is DataMode.MOUSE:
+        return [reading.delta_x, reading.delta_y, int(reading.left), int(reading.right)]
+    if mode is DataMode.RAW:
+        return list(reading.fields)
+    return [float(value) for value in reading.angles]
+
+
 def _cmd_formats(_args):
     print("formats:")
     for fmt in FORMATS.values():
@@ -143,6 +262,33 @@ def build_parser():
     check.add_argument("input", nargs="+")
     check.add_argument("--frames", type=int, default=32, help="frames to inspect")
     check.set_defaults(func=_cmd_verify)
+
+    track = sub.add_parser("track", help="read the head tracker")
+    track.add_argument("-P", "--port", help="serial port, e.g. /dev/ttyUSB0")
+    track.add_argument(
+        "--simulate", action="store_true", help="use the built in tracker simulator"
+    )
+    track.add_argument(
+        "--baud", type=int, choices=BAUD_RATES, help="skip the rate scan"
+    )
+    track.add_argument("-m", "--mode", default="euler", choices=sorted(TRACK_MODES))
+    track.add_argument("--format", default="binary", choices=["binary", "ascii"])
+    track.add_argument(
+        "--continuous", action="store_true", help="stream instead of polling"
+    )
+    track.add_argument("--filter", help="magnetic,tilt filter strengths, each 0-7")
+    track.add_argument("--mouse", help="mouse sensitivity,threshold, each 0-9")
+    track.add_argument(
+        "-n", "--samples", type=int, help="stop after this many readings"
+    )
+    track.add_argument("--csv", help="also write the readings to this file")
+    track.add_argument(
+        "--timeout", type=float, default=2.0, help="seconds to wait for a reply"
+    )
+    track.add_argument(
+        "--info", action="store_true", help="report the version and stop"
+    )
+    track.set_defaults(func=_cmd_track)
 
     listing = sub.add_parser("formats", help="list formats, profiles and layouts")
     listing.set_defaults(func=_cmd_formats)

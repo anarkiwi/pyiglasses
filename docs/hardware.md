@@ -54,7 +54,7 @@ Section E also notes that hardware 3D multiplexers, which combine two full video
 into one field sequential signal, existed for NTSC and PAL but not for VGA. This package
 does that multiplexing in software.
 
-## Head tracker (future work)
+## Head tracker
 
 The head tracker is a separate device reporting yaw, pitch and roll over a three-wire
 RS-232C interface (TXD, RXD, GND) at 1200, 2400, 4800, 9600 or 19200 bps, with rate
@@ -91,6 +91,9 @@ Section B also documents a firmware erratum: trackers with firmware earlier than
 revision 001.003 report the wrong sign for yaw in Euler mode, so a driver should read
 the version string and correct for it.
 
-None of this is implemented yet. A driver would need a serial transport, the reset and
-mode negotiation handshake, packet framing with checksum validation for modes 0-2, and
-version-dependent yaw sign correction.
+`pyiglasses.tracker` implements this - the serial transport, the rate sweep and reset
+handshake, packet framing and checksum validation for modes 0-2, host-side yaw for
+cooked mode, mouse packet decoding, and the version-dependent yaw sign correction - and
+`iglasses track` drives it from the command line. A software tracker that speaks the
+same protocol is included, so the driver runs with no hardware attached. See
+[tracker.md](tracker.md) for the protocol details and the driver's conventions.
