@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyiglasses"
+version = "0.1.0"
+description = "Drivers and tools for Virtual i-O i-glasses! head mounted displays"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "Josh Bailey", email = "josh@overlyspecific.com"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+dependencies = ["av>=12", "numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-xdist", "pytest-cov", "black", "pylint"]
+
+[project.scripts]
+iglasses = "pyiglasses.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/anarkiwi/pyiglasses"
+
+[tool.setuptools.packages.find]
+include = ["pyiglasses*"]
+
+[tool.pytest.ini_options]
+addopts = "-n auto --cov=pyiglasses --cov-report=term-missing --cov-fail-under=85"
+testpaths = ["tests"]
+
+[tool.black]
+target-version = ["py311"]
+
+[tool.pylint.main]
+extension-pkg-allow-list = ["av"]
+disable = ["too-many-locals", "too-many-arguments", "too-many-instance-attributes", "too-few-public-methods", "duplicate-code", "too-many-positional-arguments"]
+max-line-length = 100
