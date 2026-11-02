@@ -7,7 +7,7 @@ name = "pyiglasses"
 version = "0.1.0"
 description = "Drivers and tools for Virtual i-O i-glasses! head mounted displays"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{name = "Josh Bailey", email = "josh@overlyspecific.com"}]
@@ -34,7 +34,7 @@ addopts = "-n auto --cov=pyiglasses --cov-report=term-missing --cov-fail-under=8
 testpaths = ["tests"]
 
 [tool.black]
-target-version = ["py311"]
+target-version = ["py312"]
 
 [tool.pylint.main]
 extension-pkg-allow-list = ["av"]
